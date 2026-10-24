@@ -193,9 +193,58 @@ function setCategory(view,category,button){activeCategories[view]=category;butto
 function money(value){return "KSh "+Number(value).toLocaleString("en-KE")}
 function toItem(row){const media=Array.isArray(row.media_urls)?row.media_urls:[];const travel=["hotel","tour","activity","travel_service"].includes(row.listing_type);return {id:row.id,kind:row.listing_type==="rental"?"rentals":travel?"travel":"market",listingType:row.listing_type,priceUnit:row.price_unit||null,title:row.title,category:row.category,price:row.price,location:row.location,description:row.description,contact:row.contact_whatsapp||"",phone:row.contact_phone||"",email:row.contact_email||"",tiktok:row.tiktok_url||"",instagram:row.instagram_url||"",facebook:row.facebook_url||"",image:row.image_url||"",media:media,owner_id:row.owner_id,status:row.status,createdAt:new Date(row.created_at).getTime()}}
 function iconFor(item){if(item.kind==="rentals")return "🏠";if(item.kind==="travel")return item.listingType==="hotel"?"🏨":item.listingType==="tour"?"🦁":item.listingType==="activity"?"🌴":"🧭";return {"Electronics":"📱","Fashion":"👟","Home & Living":"🪑","Food":"🍲","Cosmetics & Beauty":"💄","Cosmetics & Beauty (Wholesale)":"💄","Plots for Sale":"🌳","Other":"📦"}[item.category]||"📦"}
-function contactLink(item){const number=String(item.contact||"").replace(/\D/g,"");const text=encodeURIComponent('Hello, I saw your listing "'+item.title+'" on My Market. Is it still available?');return number?"https://wa.me/"+number+"?text="+text:""}
-function profileUrl(value,platform){let v=String(value||"").trim();if(!v)return "";if(/^https?:\/\//i.test(v)){try{const u=new URL(v);if(u.protocol!=="https:"&&u.protocol!=="http:")return "";return u.href}catch(e){return ""}}v=v.replace(/^@/,"").replace(/^\/+|\/+$/g,"");if(!v||/[\s]/.test(v))return "";if(platform==="tiktok")return "https://www.tiktok.com/@"+encodeURIComponent(v);if(platform==="instagram")return "https://www.instagram.com/"+encodeURIComponent(v)+"/";if(platform==="facebook")return "https://www.facebook.com/"+encodeURIComponent(v);return ""}
-function sellerContactMarkup(item){const links=[];if(item.contact){const wa=contactLink(item);if(wa)links.push('<a class="small-btn" href="'+escapeHTML(wa)+'" target="_blank" rel="noopener noreferrer">WhatsApp</a>')}if(item.phone){const phone=String(item.phone).trim();if(/^[+0-9() .-]{7,24}$/.test(phone))links.push('<a class="small-btn secondary" href="tel:'+escapeHTML(phone.replace(/[^+0-9]/g,''))+'">Call</a>')}if(item.email){const email=String(item.email).trim();if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))links.push('<a class="small-btn secondary" href="mailto:'+escapeHTML(email)+'">Email</a>')}const socials=[["TikTok",item.tiktok,"tiktok"],["Instagram",item.instagram,"instagram"],["Facebook",item.facebook,"facebook"]];for(const [label,value,platform] of socials){const url=profileUrl(value,platform);if(url)links.push('<a class="small-btn secondary" href="'+escapeHTML(url)+'" target="_blank" rel="noopener noreferrer">'+label+'</a>')}return links.length?'<div class="card-actions social-actions">'+links.join("")+"</div>":""}
+function normalizePhoneNumber(value){
+  let raw=String(value||"").trim();
+  if(!raw)return "";
+  const hasPlus=raw.startsWith("+");
+  let digits=raw.replace(/\D/g,"");
+  if(!digits)return "";
+  // Accept common Kenyan local formats as well as international numbers.
+  if(digits.startsWith("0") && digits.length===10) digits="254"+digits.slice(1);
+  else if((digits.length===9) && /^[17]/.test(digits)) digits="254"+digits;
+  // E.164 international numbers normally contain 8–15 digits.
+  if(digits.length<8 || digits.length>15)return "";
+  // Reject numbers that are just punctuation or contain unsupported characters.
+  if(!hasPlus && !/^\d[\d\s().-]*$/.test(raw))return "";
+  return digits;
+}
+function contactLink(item){
+  const number=normalizePhoneNumber(item.contact);
+  const text=encodeURIComponent('Hello, I saw your listing "'+item.title+'" on My Market. Is it still available?');
+  return number?"https://wa.me/"+number+"?text="+text:"";
+}
+function profileUrl(value,platform){
+  let v=String(value||"").trim();
+  if(!v)return "";
+  if(/^https?:\/\//i.test(v)){
+    try{
+      const u=new URL(v);
+      if(u.protocol!=="https:"&&u.protocol!=="http:")return "";
+      return u.href;
+    }catch(e){return ""}
+  }
+  v=v.replace(/^@/,"").replace(/^\/+|\/+$/g,"");
+  if(!v||/[\s]/.test(v))return "";
+  if(platform==="tiktok")return "https://www.tiktok.com/@"+encodeURIComponent(v);
+  if(platform==="instagram")return "https://www.instagram.com/"+encodeURIComponent(v)+"/";
+  if(platform==="facebook")return "https://www.facebook.com/"+encodeURIComponent(v);
+  return "";
+}
+function sellerContactMarkup(item){
+  const links=[];
+  const wa=contactLink(item);
+  if(wa)links.push('<a class="small-btn" href="'+escapeHTML(wa)+'" target="_blank" rel="noopener noreferrer">WhatsApp</a>');
+  const phone=normalizePhoneNumber(item.phone);
+  if(phone)links.push('<a class="small-btn secondary" href="tel:+'+phone+'">Call</a>');
+  const email=String(item.email||"").trim();
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))links.push('<a class="small-btn secondary" href="mailto:'+encodeURIComponent(email).replace(/%40/g,"@")+'">Email</a>');
+  const socials=[["TikTok",item.tiktok,"tiktok"],["Instagram",item.instagram,"instagram"],["Facebook",item.facebook,"facebook"]];
+  for(const [label,value,platform] of socials){
+    const url=profileUrl(value,platform);
+    if(url)links.push('<a class="small-btn secondary" href="'+escapeHTML(url)+'" target="_blank" rel="noopener noreferrer">'+label+'</a>');
+  }
+  return links.length?'<div class="card-actions social-actions" aria-label="Seller contact options">'+links.join("")+"</div>":"";
+}
 function mediaElement(url,title){const safe=escapeHTML(url);const isVideo=/\.(mp4|mov|webm)(?:[?#].*)?$/i.test(url);return isVideo?'<video src="'+safe+'" controls playsinline preload="metadata" aria-label="Video for '+escapeHTML(title)+'"></video>':'<img src="'+safe+'" alt="'+escapeHTML(title)+'" loading="lazy">'}
 function mediaMarkup(item){const urls=[...(item.media||[])];if(!urls.length&&item.image)urls.push(item.image);if(!urls.length)return escapeHTML(iconFor(item));return mediaElement(urls[0],item.title)}
 function card(item,owner=false){const isRental=item.kind==="rentals";const image=mediaMarkup(item);const mediaCount=(item.media||[]).length;const isTravel=item.kind==="travel";const label=isRental?"RENTAL":isTravel?escapeHTML(item.category||"TRAVEL"):escapeHTML(item.category||"PRODUCT");const priceText=money(item.price)+(isRental?" / month":isTravel?(" / "+escapeHTML(item.priceUnit||defaultPriceUnit(item.listingType))):"");const status=owner?'<p class="notice">Status: <strong>'+escapeHTML(item.status||"pending")+'</strong></p>':"";const mediaNote=mediaCount>1?'<p class="notice">📷 '+mediaCount+' photos/videos</p>':"";const action=owner?'<button class="small-btn secondary" onclick="deleteListing(\''+escapeHTML(item.id)+'\')">Delete</button>':'<button class="small-btn secondary" onclick="viewDetails(\''+escapeHTML(item.id)+'\')">Details</button>';return '<article class="listing"><div class="listing-photo">'+image+'<span class="tag">'+label+'</span></div><div class="listing-body"><h4>'+escapeHTML(item.title)+'</h4><p class="price">'+priceText+'</p><p class="location">📍 '+escapeHTML(item.location)+'</p>'+mediaNote+status+'<div class="card-actions">'+action+'</div>'+sellerContactMarkup(item)+(sellerShops.some(sh=>sh.owner_id===item.owner_id)?'<button class="small-btn secondary" style="width:100%;margin-top:8px" onclick="viewShop(\''+escapeHTML(item.owner_id)+'\')">🏪 Visit seller shop</button>':'')+'</div></article>'}
@@ -215,7 +264,7 @@ function renderListings(){const publicItems=allListings.filter(i=>i.status==="pu
 function renderAdminQueue(){const msg=document.getElementById("adminMessage");const grid=document.getElementById("pendingGrid");if(!isMarketAdmin){msg.textContent="This account does not currently have administrator access.";grid.innerHTML="";return}msg.textContent="Administrator access confirmed. Pending adverts: "+allListings.filter(i=>i.status==="pending").length;const pending=allListings.filter(i=>i.status==="pending");grid.innerHTML=pending.length?pending.map(item=>{const image=mediaMarkup(item);const extraMedia=(item.media||[]).slice(1).map(url=>mediaElement(url,item.title)).join("");return '<article class="listing"><div class="listing-photo">'+image+'<span class="tag">'+(item.kind==="rentals"?"RENTAL":item.kind==="travel"?escapeHTML(item.category||"TRAVEL"):"PRODUCT")+'</span></div>'+(extraMedia?'<div class="admin-media-gallery">'+extraMedia+'</div>':"")+'<div class="listing-body"><h4>'+escapeHTML(item.title)+'</h4><p class="price">'+money(item.price)+(item.kind==="rentals"?" / month":item.kind==="travel"?" / "+escapeHTML(item.priceUnit||defaultPriceUnit(item.listingType)):"")+'</p><p class="location">📍 '+escapeHTML(item.location)+'</p><p class="notice">Category: '+escapeHTML(item.category)+'<br>WhatsApp: '+escapeHTML(item.contact||"Not provided")+'<br>Phone: '+escapeHTML(item.phone||"Not provided")+'<br>Email: '+escapeHTML(item.email||"Not provided")+'<br>Description: '+escapeHTML(item.description||"")+'<br>Owner ID: '+escapeHTML(item.owner_id||"")+'</p><div class="card-actions"><button class="small-btn" data-moderate-id="'+escapeHTML(item.id)+'" data-status="published">Approve</button><button class="small-btn secondary" data-moderate-id="'+escapeHTML(item.id)+'" data-status="rejected">Reject</button></div></div></article>'}).join(""):emptyCard("No adverts are waiting for review.")}
 document.getElementById("pendingGrid").addEventListener("click",function(event){const button=event.target.closest("button[data-moderate-id]");if(button)moderateListing(button.dataset.moderateId,button.dataset.status)});
 async function moderateListing(id,status){if(!isMarketAdmin){notify("Admin access is required.");return}const action=status==="published"?"approve":"reject";if(!confirm("Are you sure you want to "+action+" this advert?"))return;const {error}=await supabaseClient.from("listings").update({status}).eq("id",id);if(error){console.error(error);notify("Could not update advert: "+error.message);return}notify("Advert "+(status==="published"?"approved and published.":"rejected."));await loadListings()}
-function viewDetails(id){const item=allListings.find(i=>i.id===id);if(!item)return notify("Listing not found.");const contacts=[item.contact?"WhatsApp: "+item.contact:"",item.phone?"Phone: "+item.phone:"",item.email?"Email: "+item.email:"",item.tiktok?"TikTok: "+item.tiktok:"",item.instagram?"Instagram: "+item.instagram:"",item.facebook?"Facebook: "+item.facebook:""].filter(Boolean).join("\n");alert(item.title+"\n\nPrice: "+money(item.price)+(item.kind==="rentals"?" per month":item.kind==="travel"?" per "+(item.priceUnit||defaultPriceUnit(item.listingType)):"")+"\nLocation: "+item.location+"\n\n"+(item.description||"No further description.")+(contacts?"\n\nSeller contact details:\n"+contacts:"")+(item.media?.length?"\n\nMedia files: "+item.media.length:""))}
+function viewDetails(id){const item=allListings.find(i=>i.id===id);if(!item)return notify("Listing not found.");const contacts=[item.contact?"WhatsApp: "+item.contact:"",item.phone?"Phone call: "+item.phone:"",item.email?"Email: "+item.email:"",item.facebook?"Facebook: "+item.facebook:"",item.instagram?"Instagram: "+item.instagram:"",item.tiktok?"TikTok: "+item.tiktok:""].filter(Boolean).join("\n");alert(item.title+"\n\nPrice: "+money(item.price)+(item.kind==="rentals"?" per month":item.kind==="travel"?" per "+(item.priceUnit||defaultPriceUnit(item.listingType)):"")+"\nLocation: "+item.location+"\n\n"+(item.description||"No further description.")+(contacts?"\n\nSeller contact details:\n"+contacts:"")+(item.media?.length?"\n\nMedia files: "+item.media.length:""))}
 async function deleteListing(id){if(!currentUser)return notify("Sign in first.");if(!confirm("Delete this advert?"))return;const {error}=await supabaseClient.from("listings").delete().eq("id",id);if(error){console.error(error);return notify("Could not delete advert: "+error.message)}notify("Advert deleted.");await loadListings()}
 function updateFormFields(){const kind=document.getElementById("kind").value;const category=document.getElementById("category");const opts={product:["Electronics","Fashion","Home & Living","Food","Cosmetics & Beauty","Cosmetics & Beauty (Wholesale)","Plots for Sale","Other"],rental:["Bedsitter","Single Room","Hostel","Apartment","Other"],hotel:["Hotel & Accommodation"],tour:["Tours & Safaris"],activity:["Activities & Experiences"],travel_service:["Travel Services"]};category.innerHTML=(opts[kind]||opts.product).map(x=>'<option>'+x+'</option>').join("");document.getElementById("price").placeholder=kind==="rental"?"Monthly rent, e.g. 5000":kind==="hotel"?"Price per room/night":kind==="tour"?"Price per person or package":kind==="activity"?"Price per person":kind==="travel_service"?"Price per service":"e.g. 2500";document.getElementById("priceHelp").textContent=kind==="rental"?"Price is displayed per month.":kind==="hotel"?"Price is displayed per room per night. State dates and availability in the description.":kind==="tour"?"Price is displayed per person/package. Include duration and what is included.":kind==="activity"?"Price is displayed per person. Include location and available dates.":kind==="travel_service"?"Include service area and details in the description.":"Enter the advertised price.";document.getElementById("description").placeholder=kind==="hotel"?"Describe rooms, amenities, check-in details and location":kind==="tour"?"Describe destination, duration, itinerary and what is included":kind==="activity"?"Describe the activity, location, duration and dates":kind==="travel_service"?"Describe your guide or travel service":kind==="rental"?"Describe the property, deposit and viewing arrangements":"Describe your product or property"}
 
